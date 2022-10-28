@@ -3,12 +3,22 @@
 CHAR__GREEN='\033[0;32m'
 CHAR__RED='\033[0;31m'
 CHAR__RESET='\033[0m'
+CHAR__BOLD='\033[1m'
 menuStr=""
 returnOrExit=""
+LINES=$(tput lines)
+COLS=$(tput cols)
+
+if [[ $SHELL = '/bin/bash' ]] || grep -qi microsoft /proc/version; then
+  # Enable arrow keys
+  ENABLE_ARROW_KEYS='1'
+else
+  ENABLE_ARROW_KEYS='0'
+fi
 
 function hideCursor {
   printf "\033[?25l"
-  
+
   # capture CTRL+C so cursor can be reset
   trap "showCursor && echo '' && ${returnOrExit} 0" SIGINT
 }
@@ -33,18 +43,14 @@ function renderMenu {
   local instruction="$1"
   local selectedIndex=$2
   local listLength=$itemsLength
-  local longest=0
-  local spaces=""
-  menuStr="\n $instruction\n"
+  local spaces=$5
+  local firstLine="$6"
+  local middleLine="$7"
+  local lastLine="$8"
 
-  # Get the longest item from the list so that we know how many spaces to add
-  # to ensure there's no overlap from longer items when a list is scrolling up or down.
-  for (( i=0; i<$itemsLength; i++ )); do
-    if (( ${#menuItems[i]} > longest )); then
-      longest=${#menuItems[i]}
-    fi
-  done
-  spaces=$(printf ' %.0s' $(eval "echo {1.."$(($longest))"}"))
+  menuStr="\n ${CHAR__BOLD}$instruction${CHAR__RESET} (Q to exit)\n"
+
+  menuStr+="\n $firstLine"
 
   if [ $3 -ne 0 ]; then
     listLength=$3
@@ -63,19 +69,30 @@ function renderMenu {
       currentSelection="${currItem}"
       selector="${CHAR__GREEN}ᐅ${CHAR__RESET}"
       currItem="${CHAR__GREEN}${currItem}${CHAR__RESET}"
+      optionIndex="${CHAR__GREEN}${i})${CHAR__RESET}"
     else
       selector=" "
+      optionIndex="${i})"
+    fi
+    if [[ $i -ge 10 ]]; then
+      offset=" "
+    else
+      offset="  "
     fi
 
-    currItem="${spaces:0:0}${currItem}${spaces:currItemLength}"
+    currItem="${optionIndex} ${spaces:0:0}${currItem}${spaces:currItemLength}${offset}"
 
-    menuStr="${menuStr}\n ${selector} ${currItem}"
+    menuStr+="\n │${selector} ${currItem}│"
+
+    if [[ $i -ne  $((listLength-1)) ]]; then
+      menuStr+="\n $middleLine"
+    fi
   done
 
-  menuStr="${menuStr}\n"
+  menuStr+="\n $lastLine"
 
   # whether or not to overwrite the previous menu output
-  [ $4 ] && clearLastMenu
+  [ $4 ] && [ $4 = true ] && clearLastMenu
 
   printf "${menuStr}"
 }
@@ -103,19 +120,34 @@ function renderHelp {
   echo;
 }
 
+function handleEnterKey {
+#  clearLastMenu true
+  showCursor
+  captureInput=false
+
+  if [[ "${selectionVariable}" != "" ]]; then
+    printf -v "${selectionVariable}" "${currentSelection}"
+  else
+    selectedChoice="${currentSelection}"
+    selectedChoiceIndex="${selectedIndex}"
+  fi
+}
+
 function getChoice {
-  local KEY__ARROW_UP=$(echo -e "\033[A")
-  local KEY__ARROW_DOWN=$(echo -e "\033[B")
+  local KEY__ARROW_UP=$(echo -e "[A")
+  local KEY__ARROW_DOWN=$(echo -e "[B")
   local KEY__ENTER=$(echo -e "\n")
+  local KEY__QUIT=$(echo -e "q")
   local captureInput=true
   local displayHelp=false
   local maxViewable=0
   local instruction="Select an item from the list:"
   local selectedIndex=0
-  
+
   unset selectedChoice
+  unset selectedChoiceIndex
   unset selectionVariable
-  
+
   if [[ "${PS1}" == "" ]]; then
     # running via script
     returnOrExit="exit"
@@ -123,7 +155,7 @@ function getChoice {
     # running via CLI
     returnOrExit="return"
   fi
-  
+
   if [[ "${BASH}" == "" ]]; then
     printf "\n ${CHAR__RED}[ERROR] This function utilizes Bash expansion, but your current shell is \"${SHELL}\"${CHAR__RESET}\n"
     $returnOrExit 1
@@ -132,7 +164,7 @@ function getChoice {
     renderHelp
     $returnOrExit 1
   fi
-  
+
   local remainingArgs=()
   while [[ $# -gt 0 ]]; do
     local key="$1"
@@ -178,7 +210,7 @@ function getChoice {
 
   set -- "${remainingArgs[@]}"
   local itemsLength=${#menuItems[@]}
-  
+
   # no menu items, at least 1 required
   if [[ $itemsLength -lt 1 ]]; then
     printf "\n ${CHAR__RED}[ERROR] No menu items provided${CHAR__RESET}\n"
@@ -186,38 +218,83 @@ function getChoice {
     $returnOrExit 1
   fi
 
-  renderMenu "$instruction" $selectedIndex $maxViewable
+  local longest=0
+  # Get the longest item from the list so that we know how many spaces to add
+  # to ensure there's no overlap from longer items when a list is scrolling up or down.
+  for (( i=0; i<$itemsLength; i++ )); do
+    if (( ${#menuItems[i]} > longest )); then
+      itemWithoutColor=$(echo -e "${menuItems[i]}" | sed "s/$(echo -e "\e")[^m]*m//g")
+      longest=${#itemWithoutColor}
+    fi
+  done
+
+  # Prepare main arguments to pass in renderMenu to improve performance of that function
+  local spaces=$(printf ' %.0s' $(eval "echo {1.."$(($longest))"}"))
+
+  local line0=$(printf "%-$((longest+9))s" "─")
+  local firstLine=$(echo -n "╭${line0// /─}╮")
+  local middleLine="$(echo -n "├${line0// /─}┤")"
+  local lastLine=$(echo -n "╰${line0// /─}╯")
+
+  local menuLength=$((itemsLength*2+1))
+  if [[ $menuLength -gt $LINES ]]; then
+    printf "\033[8;$((menuLength+20));${COLS}t"
+  fi
+
+  renderMenu "$instruction" $selectedIndex $maxViewable false "$spaces" "$firstLine" "$middleLine" "$lastLine"
   hideCursor
 
   while $captureInput; do
-    read -rsn3 key # `3` captures the escape (\033'), bracket ([), & type (A) characters.
+    read -rsn1 key # `3` captures the escape (\033'), bracket ([), & type (A) characters. `1` captures only the first char of those described previously
+    if [[ "$key" = $'\E' ]]; then
+        read -rsn2 key
+        case "$key" in
+          "$KEY__ARROW_UP")
+            selectedIndex=$((selectedIndex-1))
+            (( $selectedIndex < 0 )) && selectedIndex=$((itemsLength-1))
 
-    case "$key" in
-      "$KEY__ARROW_UP")
-        selectedIndex=$((selectedIndex-1))
-        (( $selectedIndex < 0 )) && selectedIndex=$((itemsLength-1))
+            renderMenu "$instruction" $selectedIndex $maxViewable true "$spaces" "$firstLine" "$middleLine" "$lastLine"
+            ;;
 
-        renderMenu "$instruction" $selectedIndex $maxViewable true
-        ;;
+          "$KEY__ARROW_DOWN")
+            selectedIndex=$((selectedIndex+1))
+            (( $selectedIndex == $itemsLength )) && selectedIndex=0
 
-      "$KEY__ARROW_DOWN")
-        selectedIndex=$((selectedIndex+1))
-        (( $selectedIndex == $itemsLength )) && selectedIndex=0
+            renderMenu "$instruction" $selectedIndex $maxViewable true "$spaces" "$firstLine" "$middleLine" "$lastLine"
+            ;;
 
-        renderMenu "$instruction" $selectedIndex $maxViewable true
-        ;;
-
-      "$KEY__ENTER")
-        clearLastMenu true
-        showCursor
-        captureInput=false
-        
-        if [[ "${selectionVariable}" != "" ]]; then
-          printf -v "${selectionVariable}" "${currentSelection}"
-        else
-          selectedChoice="${currentSelection}"
-        fi
-        ;;
-    esac
+          "$KEY__ENTER")
+            handleEnterKey
+            ;;
+        esac
+    else
+      case "$key" in
+        "$KEY__ENTER")
+          handleEnterKey
+          ;;
+        "$KEY__QUIT")
+          echo ""
+          echo "Quit..."
+          showCursor
+          exit 0
+          ;;
+        *)
+          if [[ -n ${key//[0-9]/} ]];
+          then
+            selectedIndex=0
+          else
+            read -rsn1 -t 0.25 unit
+            if [[ $unit ]] && [[ $unit =~ ^-?[0-9]+$ ]]; then
+              number=${key}${unit}
+            else
+              number=${key}
+            fi
+            selectedIndex=${number}
+            (( $selectedIndex > $itemsLength )) && selectedIndex=0
+          fi
+          renderMenu "$instruction" $selectedIndex $maxViewable true "$spaces" "$firstLine" "$middleLine" "$lastLine"
+          ;;
+      esac
+    fi
   done
 }
