@@ -4,12 +4,13 @@ A script that allows a user to use arrow keys to select an item from a list. Som
 
 ### New features
 1. Table style menu
-2. Added `selectedChoiceIndex` to store index of the selected option
-3. Added the possibility to type number to select an option
-4. Added the possibility to quit typing 'q'
-5. Improved handling of other keys different from arrow keys or numbers
-6. Improved handling of colored options
-7. Improved performance
+2. Added the possibility to insert options with | separator to create multi-column table (eg. `options=("First option|First info" "Second option|Second info")`)
+3. Added `selectedChoiceIndex` to store index of the selected option
+4. Added the possibility to type number to select an option
+5. Added the possibility to quit typing 'q'
+6. Improved handling of other keys different from arrow keys or numbers
+7. Improved handling of colored options
+8. Improved performance
 
 ---
 
@@ -41,6 +42,7 @@ getChoice -h
 ```
 
 ## Example
+##### Single column
 ```sh
 options=("First option"
           "Second option"
@@ -50,3 +52,13 @@ getChoice -q "Select an option:" -o options
 echo -e "Option $selectedChoice with index $selectedChoiceIndex"
 ```
 ![example menu](img.png)
+
+##### Multi column
+```sh
+options=("First option|First info"
+          "Second option|Second info"
+          "Third option|Third info|Another info")
+getChoice -q "Select an option:" -o options
+echo -e "Option $selectedChoice with index $selectedChoiceIndex"
+```
+![example menu](img_multicolumn.png)

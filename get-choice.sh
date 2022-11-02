@@ -9,13 +9,6 @@ returnOrExit=""
 LINES=$(tput lines)
 COLS=$(tput cols)
 
-if [[ $SHELL = '/bin/bash' ]] || grep -qi microsoft /proc/version; then
-  # Enable arrow keys
-  ENABLE_ARROW_KEYS='1'
-else
-  ENABLE_ARROW_KEYS='0'
-fi
-
 function hideCursor {
   printf "\033[?25l"
 
@@ -43,10 +36,9 @@ function renderMenu {
   local instruction="$1"
   local selectedIndex=$2
   local listLength=$itemsLength
-  local spaces=$5
-  local firstLine="$6"
-  local middleLine="$7"
-  local lastLine="$8"
+  local firstLine="$5"
+  local middleLine="$6"
+  local lastLine="$7"
 
   menuStr="\n ${CHAR__BOLD}$instruction${CHAR__RESET} (Q to exit)\n"
 
@@ -62,9 +54,8 @@ function renderMenu {
   fi
 
   for (( i=$start; i<$listLength; i++ )); do
-    local currItem="${menuItems[i]}"
+    local currItem="${matrix[$i,0]}"
     currItemLength=${#currItem}
-
     if [[ $i = $selectedIndex ]]; then
       currentSelection="${currItem}"
       selector="${CHAR__GREEN}ᐅ${CHAR__RESET}"
@@ -75,15 +66,18 @@ function renderMenu {
       optionIndex="${i})"
     fi
     if [[ $i -ge 10 ]]; then
-      offset=" "
+      offset=""
     else
-      offset="  "
+      offset=" "
     fi
-
-    currItem="${optionIndex} ${spaces:0:0}${currItem}${spaces:currItemLength}${offset}"
-
-    menuStr+="\n │${selector} ${currItem}│"
-
+    currItem="${optionIndex} ${colSpaces[0]:0:0}${currItem}${colSpaces[0]:currItemLength}"
+    # Loop for columns to complete row item
+    for (( j=1; j<${#colSpaces[@]}; j++)); do
+      local newCol="${matrix[$i,$j]}"
+      currItemLength=${#newCol}
+      currItem="${currItem} │ ${colSpaces[$j]:0:0}${newCol}${colSpaces[$j]:currItemLength}"
+    done
+    menuStr+="\n │${selector} ${currItem}${offset}│"
     if [[ $i -ne  $((listLength-1)) ]]; then
       menuStr+="\n $middleLine"
     fi
@@ -143,6 +137,8 @@ function getChoice {
   local maxViewable=0
   local instruction="Select an item from the list:"
   local selectedIndex=0
+  declare -A matrix=()
+  declare colSpaces=()
 
   unset selectedChoice
   unset selectedChoiceIndex
@@ -218,30 +214,58 @@ function getChoice {
     $returnOrExit 1
   fi
 
+  local colWidths=()
   local longest=0
-  # Get the longest item from the list so that we know how many spaces to add
-  # to ensure there's no overlap from longer items when a list is scrolling up or down.
+  local line0=""
+  local line1=""
+  local line2=""
+  local firstLine=""
+  local middleLine=""
+  local lastLine=""
+
   for (( i=0; i<$itemsLength; i++ )); do
-    if (( ${#menuItems[i]} > longest )); then
-      itemWithoutColor=$(echo -e "${menuItems[i]}" | sed "s/$(echo -e "\e")[^m]*m//g")
-      longest=${#itemWithoutColor}
-    fi
+    IFS='|' read -ra splitted <<< "${menuItems[i]}"
+    for (( j=0; j<${#splitted}; j++ )); do
+      matrix[$i,$j]="${splitted[j]}"
+      if (( ${#splitted[j]} > colWidths[j] )); then
+        itemWithoutColor=$(echo -e "${splitted[j]}" | sed "s/$(echo -e "\e")[^m]*m//g")
+        colWidths[j]=${#itemWithoutColor}
+      fi
+    done
   done
-
   # Prepare main arguments to pass in renderMenu to improve performance of that function
-  local spaces=$(printf ' %.0s' $(eval "echo {1.."$(($longest))"}"))
-
-  local line0=$(printf "%-$((longest+9))s" "─")
-  local firstLine=$(echo -n "╭${line0// /─}╮")
-  local middleLine="$(echo -n "├${line0// /─}┤")"
-  local lastLine=$(echo -n "╰${line0// /─}╯")
+  longest=$((5*(${#colWidths[@]}-1)))
+  for (( i=0; i<${#colWidths[@]}; i++)); do
+    local factor=8
+    if (( i != 0 )); then
+      factor=4
+    fi
+    # Get the longest item from the list so that we know how many spaces to add
+    # to ensure there's no overlap from longer items when a list is scrolling up or down.
+    colSpaces[$i]=$(printf ' %.0s' $(eval "echo {1.."$((${colWidths[i]}))"}"))
+    longest=$((longest+colWidths[i]))
+    firstLineSeparator="┬"
+    middleLineSeparator="┼"
+    lastLineSeparator="┴"
+    if (( i == ${#colWidths[@]}-1 )); then
+      firstLineSeparator=""
+      middleLineSeparator=""
+      lastLineSeparator=""
+    fi
+    line0+=$(printf "%-$((colWidths[i]+factor))s%s" "─" "$firstLineSeparator")
+    line1+=$(printf "%-$((colWidths[i]+factor))s%s" "─" "$middleLineSeparator")
+    line2+=$(printf "%-$((colWidths[i]+factor))s%s" "─" "$lastLineSeparator")
+  done
+  firstLine=$(echo -n "╭${line0// /─}╮")
+  middleLine=$(echo -n "├${line1// /─}┤")
+  lastLine=$(echo -n "╰${line2// /─}╯")
 
   local menuLength=$((itemsLength*2+1))
   if [[ $menuLength -gt $LINES ]]; then
     printf "\033[8;$((menuLength+20));${COLS}t"
   fi
 
-  renderMenu "$instruction" $selectedIndex $maxViewable false "$spaces" "$firstLine" "$middleLine" "$lastLine"
+  renderMenu "$instruction" $selectedIndex $maxViewable false "$firstLine" "$middleLine" "$lastLine"
   hideCursor
 
   while $captureInput; do
@@ -253,14 +277,14 @@ function getChoice {
             selectedIndex=$((selectedIndex-1))
             (( $selectedIndex < 0 )) && selectedIndex=$((itemsLength-1))
 
-            renderMenu "$instruction" $selectedIndex $maxViewable true "$spaces" "$firstLine" "$middleLine" "$lastLine"
+            renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine"
             ;;
 
           "$KEY__ARROW_DOWN")
             selectedIndex=$((selectedIndex+1))
             (( $selectedIndex == $itemsLength )) && selectedIndex=0
 
-            renderMenu "$instruction" $selectedIndex $maxViewable true "$spaces" "$firstLine" "$middleLine" "$lastLine"
+            renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine"
             ;;
 
           "$KEY__ENTER")
@@ -292,7 +316,7 @@ function getChoice {
             selectedIndex=${number}
             (( $selectedIndex > $itemsLength )) && selectedIndex=0
           fi
-          renderMenu "$instruction" $selectedIndex $maxViewable true "$spaces" "$firstLine" "$middleLine" "$lastLine"
+          renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine"
           ;;
       esac
     fi
