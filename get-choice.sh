@@ -22,7 +22,7 @@ function showCursor {
 }
 
 function clearLastMenu {
-  local msgLineCount=$(printf "$menuStr" | wc -l)
+  local msgLineCount=$((itemsLength*2+3))
   # moves the cursor up N lines so the output overwrites it
   echo -en "\033[${msgLineCount}A"
 
@@ -55,12 +55,11 @@ function renderMenu {
 
   for (( i=$start; i<$listLength; i++ )); do
     local currItem="${matrix[$i,0]}"
-    itemWithoutColor=$(echo -e "${currItem}" | sed "s/$(echo -e "\e")[^m]*m//g")
-    currItemLength=${#itemWithoutColor}
+    currItemLength=${#matrixNoColors[$i,0]}
     if [[ $i = $selectedIndex ]]; then
       currentSelection="${currItem}"
       selector="${CHAR__GREEN}ᐅ${CHAR__RESET}"
-      currItem="${CHAR__GREEN}${itemWithoutColor}${CHAR__RESET}"
+      currItem="${CHAR__GREEN}${matrixNoColors[$i,0]}${CHAR__RESET}"
       optionIndex="${CHAR__GREEN}${i})${CHAR__RESET}"
     else
       selector=" "
@@ -75,8 +74,7 @@ function renderMenu {
     # Loop for columns to complete row item
     for (( j=1; j<${#colSpaces[@]}; j++)); do
       local newCol="${matrix[$i,$j]}"
-      itemWithoutColor=$(echo -e "${newCol}" | sed "s/$(echo -e "\e")[^m]*m//g")
-      currItemLength=${#itemWithoutColor}
+      currItemLength=${#matrixNoColors[$i,$j]}
       currItem="${currItem}${offset}│ ${colSpaces[$j]:0:0}${newCol}${colSpaces[$j]:currItemLength}"
     done
     menuStr+="\n │${selector} ${currItem}${offset}│"
@@ -140,6 +138,7 @@ function getChoice {
   local instruction="Select an item from the list:"
   local selectedIndex=0
   declare -A matrix=()
+  declare -A matrixNoColors=()
   declare colSpaces=()
 
   unset selectedChoice
@@ -230,6 +229,7 @@ function getChoice {
     for (( j=0; j<${#splitted}; j++ )); do
       matrix[$i,$j]="${splitted[j]}"
       itemWithoutColor=$(echo -e "${splitted[j]}" | sed "s/$(echo -e "\e")[^m]*m//g")
+      matrixNoColors[$i,$j]=${itemWithoutColor}
       if (( ${#itemWithoutColor} > colWidths[j] )); then
         colWidths[j]=${#itemWithoutColor}
       fi
