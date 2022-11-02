@@ -55,11 +55,12 @@ function renderMenu {
 
   for (( i=$start; i<$listLength; i++ )); do
     local currItem="${matrix[$i,0]}"
-    currItemLength=${#currItem}
+    itemWithoutColor=$(echo -e "${currItem}" | sed "s/$(echo -e "\e")[^m]*m//g")
+    currItemLength=${#itemWithoutColor}
     if [[ $i = $selectedIndex ]]; then
       currentSelection="${currItem}"
       selector="${CHAR__GREEN}ᐅ${CHAR__RESET}"
-      currItem="${CHAR__GREEN}${currItem}${CHAR__RESET}"
+      currItem="${CHAR__GREEN}${itemWithoutColor}${CHAR__RESET}"
       optionIndex="${CHAR__GREEN}${i})${CHAR__RESET}"
     else
       selector=" "
@@ -74,8 +75,9 @@ function renderMenu {
     # Loop for columns to complete row item
     for (( j=1; j<${#colSpaces[@]}; j++)); do
       local newCol="${matrix[$i,$j]}"
-      currItemLength=${#newCol}
-      currItem="${currItem} │ ${colSpaces[$j]:0:0}${newCol}${colSpaces[$j]:currItemLength}"
+      itemWithoutColor=$(echo -e "${newCol}" | sed "s/$(echo -e "\e")[^m]*m//g")
+      currItemLength=${#itemWithoutColor}
+      currItem="${currItem}${offset}│ ${colSpaces[$j]:0:0}${newCol}${colSpaces[$j]:currItemLength}"
     done
     menuStr+="\n │${selector} ${currItem}${offset}│"
     if [[ $i -ne  $((listLength-1)) ]]; then
@@ -227,8 +229,8 @@ function getChoice {
     IFS='|' read -ra splitted <<< "${menuItems[i]}"
     for (( j=0; j<${#splitted}; j++ )); do
       matrix[$i,$j]="${splitted[j]}"
-      if (( ${#splitted[j]} > colWidths[j] )); then
-        itemWithoutColor=$(echo -e "${splitted[j]}" | sed "s/$(echo -e "\e")[^m]*m//g")
+      itemWithoutColor=$(echo -e "${splitted[j]}" | sed "s/$(echo -e "\e")[^m]*m//g")
+      if (( ${#itemWithoutColor} > colWidths[j] )); then
         colWidths[j]=${#itemWithoutColor}
       fi
     done
