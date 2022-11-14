@@ -5,6 +5,7 @@ A script that allows a user to use arrow keys to select an item from a list. Som
 ### New features
 1. Table style menu 
    - Added the possibility to display the menu in table style or list style with option `-t` (`-t` means _table style_)
+   - Added the possibility to show first row as header of the table with option `-sh` (`-sh` means _showHeader_)
 2. Added the possibility to insert options with | separator to create multi-column table (eg. `options=("First option|First info" "Second option|Second info")`)
 3. Added `selectedChoiceIndex` to store index of the selected option
 4. Added the possibility to type number to select an option

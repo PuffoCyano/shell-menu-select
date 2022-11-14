@@ -4,6 +4,7 @@ CHAR__GREEN='\033[0;32m'
 CHAR__RED='\033[0;31m'
 CHAR__RESET='\033[0m'
 CHAR__BOLD='\033[1m'
+CHAR__UNDERLINE='\033[4m'
 menuStr=""
 returnOrExit=""
 LINES=$(tput lines)
@@ -43,6 +44,7 @@ function renderMenu {
   local firstLine="$5"
   local middleLine="$6"
   local lastLine="$7"
+  local showHeader="$8"
 
   local drawTable=true
   if [[ $firstLine = "" ]]; then
@@ -67,14 +69,25 @@ function renderMenu {
   for (( i=$start; i<$listLength; i++ )); do
     local currItem="${matrix[$i,0]}"
     currItemLength=${#matrixNoColors[$i,0]}
+    if [[ $showHeader = true ]]; then
+      index=$((i-1))
+    else
+      index=$i
+    fi
     if [[ $i = $selectedIndex ]]; then
       currentSelection="${currItem}"
       selector="${CHAR__GREEN}ᐅ${CHAR__RESET}"
       currItem="${CHAR__GREEN}${matrixNoColors[$i,0]}${CHAR__RESET}"
-      optionIndex="${CHAR__GREEN}${i})${CHAR__RESET}"
+      optionIndex="${CHAR__GREEN}${index})${CHAR__RESET}"
     else
-      selector=" "
-      optionIndex="${i})"
+      if [[ $i = 0 && $showHeader = true ]]; then
+        selector=" "
+        optionIndex="  "
+        currItem="${CHAR__UNDERLINE}${CHAR__BOLD}$currItem${CHAR__RESET}"
+      else
+        selector=" "
+        optionIndex="${index})"
+      fi
     fi
     if [[ $i -ge 10 ]]; then
       offset=""
@@ -87,6 +100,9 @@ function renderMenu {
       for (( j=1; j<${#colSpaces[@]}; j++)); do
         local newCol="${matrix[$i,$j]}"
         currItemLength=${#matrixNoColors[$i,$j]}
+        if [[ $i = 0 && $showHeader = true ]]; then
+          newCol="${CHAR__UNDERLINE}${CHAR__BOLD}$newCol${CHAR__RESET}"
+        fi
         currItem="${currItem}${offset}│ ${colSpaces[$j]:0:0}${newCol}${colSpaces[$j]:currItemLength}"
       done
     fi
@@ -123,6 +139,7 @@ function renderHelp {
   echo "  -q, --query              Question or statement presented to the user"
   echo "  -v, --selectionVariable  Variable the selected choice will be saved to. Defaults to the 'selectedChoice' variable."
   echo "  -t, --table              Display menu in table style, otherwise display classic list menu."
+  echo "  -sh, --showHeader        Show first row as header of the table."
   echo;
   echo "Example:"
   echo "  foodOptions=(\"pizza\" \"burgers\" \"chinese\" \"sushi\" \"thai\" \"italian\" \"shit\")"
@@ -144,7 +161,11 @@ function handleEnterKey {
     printf -v "${selectionVariable}" "${currentSelection}"
   else
     selectedChoice="${currentSelection}"
-    selectedChoiceIndex="${selectedIndex}"
+    if [[ $1 = true ]]; then
+      selectedChoiceIndex="$((selectedIndex-1))"
+    else
+      selectedChoiceIndex="${selectedIndex}"
+    fi
   fi
 }
 
@@ -156,6 +177,7 @@ function getChoice {
   local captureInput=true
   local displayHelp=false
   local tableStyle=false
+  local showHeader=false
   local maxViewable=0
   local instruction="Select an item from the list:"
   local selectedIndex=0
@@ -216,6 +238,11 @@ function getChoice {
         ;;
       -t|--table)
         tableStyle=true
+        shift
+        ;;
+      -sh|--showHeader)
+        showHeader=true
+        (( selectedIndex == 0 )) && selectedIndex=1
         shift
         ;;
       *)
@@ -304,7 +331,7 @@ function getChoice {
     printf "\033[8;$((menuLength+20));${COLS}t"
   fi
 
-  renderMenu "$instruction" $selectedIndex $maxViewable false "$firstLine" "$middleLine" "$lastLine"
+  renderMenu "$instruction" $selectedIndex $maxViewable false "$firstLine" "$middleLine" "$lastLine" $showHeader
   hideCursor
 
   while $captureInput; do
@@ -314,26 +341,28 @@ function getChoice {
         case "$key" in
           "$KEY__ARROW_UP")
             selectedIndex=$((selectedIndex-1))
-            (( $selectedIndex < 0 )) && selectedIndex=$((itemsLength-1))
+            if [[ $selectedIndex -lt 0 || ($showHeader = true && $selectedIndex -eq 0) ]]; then selectedIndex=$((itemsLength-1)); fi
 
-            renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine"
+            renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine" $showHeader
             ;;
 
           "$KEY__ARROW_DOWN")
+            firstValue=0
+            if [[ $showHeader = true ]]; then firstValue=1; fi
             selectedIndex=$((selectedIndex+1))
-            (( $selectedIndex == $itemsLength )) && selectedIndex=0
+            (( $selectedIndex == $itemsLength )) && selectedIndex=$firstValue
 
-            renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine"
+            renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine" $showHeader
             ;;
 
           "$KEY__ENTER")
-            handleEnterKey
+            handleEnterKey $showHeader
             ;;
         esac
     else
       case "$key" in
         "$KEY__ENTER")
-          handleEnterKey
+          handleEnterKey $showHeader
           ;;
         "$KEY__QUIT")
           echo ""
@@ -342,6 +371,7 @@ function getChoice {
           exit 0
           ;;
         *)
+          if [[ $showHeader = true ]]; then addend=1; else addend=0; fi
           if [[ -n ${key//[0-9]/} ]];
           then
             selectedIndex=0
@@ -353,9 +383,10 @@ function getChoice {
               number=${key}
             fi
             selectedIndex=${number}
-            (( $selectedIndex > $itemsLength )) && selectedIndex=0
+            (( selectedIndex+addend >= itemsLength )) && selectedIndex=0
           fi
-          renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine"
+          selectedIndex=$((selectedIndex+addend))
+          renderMenu "$instruction" $selectedIndex $maxViewable true "$firstLine" "$middleLine" "$lastLine" $showHeader
           ;;
       esac
     fi
