@@ -66,7 +66,7 @@ echo -e "Option $selectedChoice with index $selectedChoiceIndex"
 ```
 ![example menu](img_singlecolumn.png)
 
-##### Multi column
+##### Multi-column
 ```sh
 options=("First option|First info"
           "Second option|Second info"
@@ -75,3 +75,13 @@ getChoice -q "Select an option:" -o options -t
 echo -e "Option $selectedChoice with index $selectedChoiceIndex"
 ```
 ![example menu](img_multicolumn.png)
+
+##### Multi-column with header
+```sh
+options=("Column 1|Column 2|Third column"
+          "Second option longer|Second info"
+          "Third option|Third info plus|Another info longer than others")
+getChoice -q "Select an option:" -o options -t -sh
+echo -e "Option $selectedChoice with index $selectedChoiceIndex"
+```
+![example menu](img_withheader.png)

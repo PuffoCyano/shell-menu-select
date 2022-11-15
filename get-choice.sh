@@ -74,6 +74,8 @@ function renderMenu {
     else
       index=$i
     fi
+    local startSpace=0
+    local endSpace=${currItemLength}
     if [[ $i = $selectedIndex ]]; then
       currentSelection="${currItem}"
       selector="${CHAR__GREEN}ᐅ${CHAR__RESET}"
@@ -84,6 +86,10 @@ function renderMenu {
         selector=" "
         optionIndex="  "
         currItem="${CHAR__UNDERLINE}${CHAR__BOLD}$currItem${CHAR__RESET}"
+        local diff=$((${#colSpaces[0]}-currItemLength))
+        local mid=$((diff/2))
+        (( diff != 0 )) && startSpace=$((mid-(1-diff%2)))
+        (( diff != 0 )) && endSpace=$((${#colSpaces[0]}-mid-1))
       else
         selector=" "
         optionIndex="${index})"
@@ -94,16 +100,21 @@ function renderMenu {
     else
       offset=" "
     fi
-    currItem="${optionIndex} ${colSpaces[0]:0:0}${currItem}${colSpaces[0]:currItemLength}"
+    currItem="${optionIndex} ${colSpaces[0]:0:startSpace}${currItem}${colSpaces[0]:endSpace}"
     if [[ $drawTable = true ]]; then
       # Loop for columns to complete row item
       for (( j=1; j<${#colSpaces[@]}; j++)); do
         local newCol="${matrix[$i,$j]}"
         currItemLength=${#matrixNoColors[$i,$j]}
+        endSpace=${currItemLength}
         if [[ $i = 0 && $showHeader = true ]]; then
           newCol="${CHAR__UNDERLINE}${CHAR__BOLD}$newCol${CHAR__RESET}"
+          local diff=$((${#colSpaces[$j]}-currItemLength))
+          local mid=$((diff/2))
+          (( diff != 0 )) && startSpace=$((mid-(1-diff%2)))
+          (( diff != 0 )) && endSpace=$((${#colSpaces[$j]}-mid-1))
         fi
-        currItem="${currItem}${offset}│ ${colSpaces[$j]:0:0}${newCol}${colSpaces[$j]:currItemLength}"
+        currItem="${currItem}${offset}│ ${colSpaces[$j]:0:startSpace}${newCol}${colSpaces[$j]:endSpace}"
       done
     fi
 
