@@ -253,7 +253,6 @@ function getChoice {
         ;;
       -sh|--showHeader)
         showHeader=true
-        (( selectedIndex == 0 )) && selectedIndex=1
         shift
         ;;
       *)
@@ -262,6 +261,8 @@ function getChoice {
         ;;
     esac
   done
+
+  if [[ $showHeader = true ]]; then selectedIndex=$((selectedIndex+1)); fi
 
   # just display help
   if $displayHelp; then
@@ -278,6 +279,8 @@ function getChoice {
     renderHelp
     $returnOrExit 1
   fi
+
+  (( selectedIndex >= itemsLength )) && selectedIndex=$((itemsLength-1))
 
   local colWidths=()
   local longest=0
