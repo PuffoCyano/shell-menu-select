@@ -382,7 +382,7 @@ function getChoice {
           echo ""
           echo "Quit..."
           showCursor
-          exit 0
+          $returnOrExit 0
           ;;
         *)
           if [[ $showHeader = true ]]; then addend=1; else addend=0; fi
