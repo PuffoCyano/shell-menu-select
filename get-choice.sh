@@ -51,7 +51,7 @@ function renderMenu {
     drawTable=false
   fi
 
-  menuStr="\n ${CHAR__BOLD}$instruction${CHAR__RESET} (Q to exit)\n"
+  menuStr="\n ${CHAR__BOLD}$instruction${CHAR__RESET} (Q to exit, C to continue without selection)\n"
 
   if [[ $drawTable = true ]]; then
     menuStr+="\n $firstLine"
@@ -185,6 +185,7 @@ function getChoice {
   local KEY__ARROW_DOWN=$(echo -e "[B")
   local KEY__ENTER=$(echo -e "\n")
   local KEY__QUIT=$(echo -e "q")
+  local KEY__CONTINUE=$(echo -e "c")
   local captureInput=true
   local displayHelp=false
   local tableStyle=false
@@ -383,6 +384,13 @@ function getChoice {
           echo "Quit..."
           showCursor
           exit 0
+          ;;
+        "$KEY__CONTINUE")
+          # Continue without exit from script; this is useful when you use getChoice into a loop
+          echo ""
+          echo "Continue..."
+          showCursor
+          captureInput=false
           ;;
         *)
           if [[ $showHeader = true ]]; then addend=1; else addend=0; fi
