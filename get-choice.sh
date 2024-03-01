@@ -383,7 +383,7 @@ function getChoice {
           echo ""
           echo "Quit..."
           showCursor
-          exit 0
+          $returnOrExit 0
           ;;
         "$KEY__CONTINUE")
           # Continue without exit from script; this is useful when you use getChoice into a loop
